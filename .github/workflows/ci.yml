@@ -1,0 +1,110 @@
+name: "Resume Formatter CI/CD"
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+    
+    - name: Lint with flake8
+      run: |
+        pip install flake8
+        flake8 backend --count --select=E9,F63,F7,F82 --show-source --statistics
+    
+    - name: Verify imports
+      run: |
+        cd backend
+        python -c "import fastapi; import google.generativeai; import docx; print('Imports OK')"
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      run: |
+        cd frontend
+        npm install
+    
+    - name: Build
+      run: |
+        cd frontend
+        npm run build
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Scan Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-audit
+        pip-audit --requirements backend/requirements.txt || true
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Scan NPM dependencies
+      run: |
+        cd frontend
+        npm audit --production || true
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Build backend image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./backend/Dockerfile
+        push: false
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build frontend image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./frontend/Dockerfile
+        push: false
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

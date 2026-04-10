@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.Python
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment / secrets — NEVER commit these
+.env
+*.env
+
+# Backup / junk files
+*.bak
+*.swp
+*.swo
+*~
+
+# Uploads & generated outputs
+backend/uploads/
+backend/outputs/
+
+# Uploaded/generated documents
+*.docx
+*.pdf
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Python cache
+backend/__pycache__/
+backend/*.py[cod]

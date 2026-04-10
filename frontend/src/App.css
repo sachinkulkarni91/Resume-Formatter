@@ -1,0 +1,138 @@
+﻿.app {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem;
+  background-color: var(--kpmg-white);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  min-height: 80vh;
+}
+
+.header {
+  border-bottom: 3px solid var(--kpmg-light-blue);
+  padding-bottom: 1.5rem;
+  margin-bottom: 2rem;
+  text-align: left;
+}
+
+.header h1 {
+  font-size: 2.5rem;
+  margin: 0;
+  color: var(--kpmg-blue);
+  letter-spacing: -0.5px;
+}
+
+.header p {
+  color: var(--kpmg-medium-blue);
+  font-size: 1.1rem;
+  margin-top: 0.5rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 1rem;
+}
+
+.tab {
+  background-color: transparent;
+  color: var(--kpmg-dark-gray);
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tab:hover {
+  background-color: var(--kpmg-gray);
+  color: var(--kpmg-blue);
+}
+
+.tab.active {
+  background-color: var(--kpmg-blue);
+  color: var(--kpmg-white);
+  border-color: var(--kpmg-blue);
+}
+
+.upload-section {
+  background-color: var(--kpmg-gray);
+  padding: 1.5rem;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.upload-section h2 {
+  font-size: 1.2rem;
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.selected-file {
+  color: var(--kpmg-green);
+  font-weight: bold;
+  margin-top: 1rem;
+}
+
+.format-button {
+  width: 100%;
+  font-size: 1.2rem;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.success-message {
+  background-color: #e6f6f5;
+  color: var(--kpmg-green);
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  border: 1px solid var(--kpmg-green);
+}
+
+.error-message {
+  background-color: #fee;
+  color: #cc0000;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  border: 1px solid #cc0000;
+}
+
+.success-section {
+  margin-top: 2rem;
+  padding: 2rem;
+  background-color: #f0f8ff;
+  border-radius: 6px;
+  border: 1px dashed var(--kpmg-light-blue);
+}
+
+.download-button {
+  background-color: var(--kpmg-green);
+}
+
+.download-button:hover {
+  background-color: #008785;
+}
+
+.result-section {
+  margin-top: 2rem;
+  text-align: left;
+}
+
+.result-json {
+  background-color: var(--kpmg-dark-gray);
+  color: var(--kpmg-white);
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 0.9rem;
+}
+
+.footer {
+  margin-top: 3rem;
+  color: #888;
+  font-size: 0.9rem;
+  border-top: 1px solid #eee;
+  padding-top: 1rem;
+}
