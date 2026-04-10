@@ -94,15 +94,13 @@ class DocxGenerator:
             # Keep only template structure, we'll modify content
             self.doc = copy.deepcopy(self.template_doc)
             
-            # Actually remove all existing paragraphs from the copied template document
-            for para in self.doc.paragraphs:
-                p = para._element
-                p.getparent().remove(p)
-                
-            # Remove any tables as well
-            for table in self.doc.tables:
-                t = table._element
-                t.getparent().remove(t)
+            # Actually remove all elements from the copied template document body
+            # This guarantees we delete everything including Content Controls (w:sdt) 
+            # which python-docx paragraphs iterator misses.
+            body = self.doc._body._element
+            for child in list(body):
+                if not child.tag.endswith('sectPr'):
+                    body.remove(child)
 
         # Generate sections
         if "name" in data:
