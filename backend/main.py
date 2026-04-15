@@ -1,8 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Form
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import uuid
+import json
 from typing import Optional
 import shutil
 
@@ -116,6 +117,11 @@ async def format_resume(
         print("Using Gemini to parse resume...")
         parsed_resume = gemini_service.parse_resume(resume_text)
 
+        # DEBUG: Print parsed resume name
+        import json
+        print(f"DEBUG PARSED NAME: {parsed_resume.get('name', 'NO NAME FOUND')}")
+        print(f"DEBUG PARSED KEYS: {list(parsed_resume.keys())}")
+
         # Map to template using Gemini
         print("Mapping resume to template...")
         template_structure = {
@@ -130,15 +136,10 @@ async def format_resume(
         print("Generating formatted document...")
         generator = DocxGenerator(temp_template_path)
         formatted_doc = generator.generate_from_structured_data(mapped_resume)
-        
-        # Apply template engine
-        template_engine = TemplateEngine(temp_template_path)
-        formatted_doc = template_engine.apply_template_to_doc(formatted_doc)
 
         # Save output
         output_file = os.path.join(OUTPUT_DIR, f"{request_id}_formatted.docx")
         formatted_doc.save(output_file)
-
         # Schedule cleanup
         if background_tasks:
             background_tasks.add_task(cleanup_file, temp_target_path)
@@ -174,6 +175,80 @@ async def format_resume(
         raise HTTPException(
             status_code=500,
             detail=f"An error occurred while processing the resume: {str(e)}\n\n{traceback.format_exc()}"
+        )
+
+
+@app.post("/api/format-from-parsed")
+async def format_from_parsed(
+    parsed_json: str = Form(...),
+    template: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
+):
+    """
+    Generate formatted resume directly from reviewed parsed JSON and template.
+
+    Parameters:
+    - parsed_json: Structured resume JSON as string
+    - template: The reference template
+
+    Returns:
+    - Formatted DOCX file
+    """
+    temp_template_path = None
+    output_file = None
+
+    try:
+        template_ext = os.path.splitext(template.filename)[1].lower().lstrip(".")
+        if template_ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid template format: {template_ext}",
+            )
+
+        try:
+            mapped_resume = json.loads(parsed_json)
+            if not isinstance(mapped_resume, dict):
+                raise ValueError("parsed_json must be a JSON object")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid parsed_json: {str(e)}")
+
+        request_id = str(uuid.uuid4())
+        temp_template_path = os.path.join(UPLOAD_DIR, f"{request_id}_template_{template.filename}")
+
+        with open(temp_template_path, "wb") as f:
+            f.write(await template.read())
+
+        print("Generating formatted document from reviewed parsed JSON...")
+        generator = DocxGenerator(temp_template_path)
+        formatted_doc = generator.generate_from_structured_data(mapped_resume)
+
+        output_file = os.path.join(OUTPUT_DIR, f"{request_id}_formatted.docx")
+        formatted_doc.save(output_file)
+
+        if background_tasks:
+            background_tasks.add_task(cleanup_file, temp_template_path)
+
+        return FileResponse(
+            output_file,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename="formatted_resume.docx",
+        )
+
+    except HTTPException as e:
+        if temp_template_path:
+            cleanup_file(temp_template_path)
+        if output_file:
+            cleanup_file(output_file)
+        raise e
+
+    except Exception as e:
+        if temp_template_path:
+            cleanup_file(temp_template_path)
+        if output_file:
+            cleanup_file(output_file)
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while generating from parsed JSON: {str(e)}",
         )
 
 

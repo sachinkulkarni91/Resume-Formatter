@@ -20,6 +20,17 @@ export const formatResume = async (targetResume, template) => {
   return response.data
 }
 
+export const formatFromParsed = async (parsedData, template) => {
+  const formData = new FormData()
+  formData.append('parsed_json', JSON.stringify(parsedData))
+  formData.append('template', template)
+
+  const response = await api.post('/api/format-from-parsed', formData, {
+    responseType: 'blob'
+  })
+  return response.data
+}
+
 export const parseResume = async (resume) => {
   const formData = new FormData()
   formData.append('resume', resume)

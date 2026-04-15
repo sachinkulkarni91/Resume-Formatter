@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import './App.css'
 import { FileUpload } from './FileUpload'
-import { formatResume, parseResume, suggestImprovements } from './api'
+import { formatFromParsed, parseResume, suggestImprovements } from './api'
 
 export function App() {
   const [targetResume, setTargetResume] = useState(null)
@@ -13,18 +13,24 @@ export function App() {
   const [activeTab, setActiveTab] = useState('formatter')
   const [parseResult, setParseResult] = useState(null)
   const [improvements, setImprovements] = useState(null)
+  const [formatPreview, setFormatPreview] = useState(null)
 
   const handleTargetResumeSelect = (file) => {
     setTargetResume(file)
     setError(null)
+    setFormatPreview(null)
+    setFormattedFile(null)
+    setSuccess(false)
   }
 
   const handleTemplateSelect = (file) => {
     setTemplate(file)
     setError(null)
+    setFormattedFile(null)
+    setSuccess(false)
   }
 
-  const handleFormat = async () => {
+  const handlePreviewParse = async () => {
     if (!targetResume || !template) {
       setError('Please select both a target resume and a template')
       return
@@ -33,30 +39,51 @@ export function App() {
     setLoading(true)
     setError(null)
     setSuccess(false)
+    setFormattedFile(null)
 
     try {
-      const formattedBlob = await formatResume(targetResume, template)
-      
-      // Create a blob URL for download
+      const result = await parseResume(targetResume)
+      setFormatPreview(result)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Error parsing resume')
+      console.error('Error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGenerateFromPreview = async () => {
+    if (!formatPreview || !template) {
+      setError('Please parse and review resume data first, then upload template')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setSuccess(false)
+
+    try {
+      const formattedBlob = await formatFromParsed(formatPreview, template)
+
       const url = window.URL.createObjectURL(formattedBlob)
-      
+
       setFormattedFile({
         name: 'formatted_resume.docx',
         url: url
       })
-      
+
       setSuccess(true)
     } catch (err) {
       if (err.response?.data instanceof Blob) {
         try {
           const errorText = await err.response.data.text()
           const parsedError = JSON.parse(errorText)
-          setError(parsedError.detail || 'Error formatting resume')
+          setError(parsedError.detail || 'Error generating formatted resume')
         } catch {
-          setError('Error formatting resume')
+          setError('Error generating formatted resume')
         }
       } else {
-        setError(err.response?.data?.detail || err.message || 'Error formatting resume')
+        setError(err.response?.data?.detail || err.message || 'Error generating formatted resume')
       }
       console.error('Error:', err)
     } finally {
@@ -176,10 +203,27 @@ export function App() {
 
             <button 
               className="format-button"
-              onClick={handleFormat}
+              onClick={handlePreviewParse}
               disabled={!targetResume || !template || loading}
             >
-              {loading ? 'Processing...' : 'Format Resume'}
+              {loading ? 'Parsing...' : 'Step 3: Parse & Preview Information'}
+            </button>
+
+            {formatPreview && (
+              <div className="result-section">
+                <h3>Step 4: Review Parsed Information</h3>
+                <pre className="result-json">
+                  {JSON.stringify(formatPreview, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            <button
+              className="format-button"
+              onClick={handleGenerateFromPreview}
+              disabled={!formatPreview || !template || loading}
+            >
+              {loading ? 'Generating...' : 'Step 5: Generate Formatted Resume'}
             </button>
 
             {formattedFile && (
