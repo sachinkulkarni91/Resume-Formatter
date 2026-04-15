@@ -163,36 +163,36 @@ class GeminiService:
                 merged[section] = value
         return merged
 
-        def _count_experience_detail(self, experience: Any) -> int:
-                """Rough completeness score for experience richness."""
-                if not isinstance(experience, list):
-                        return 0
+    def _count_experience_detail(self, experience: Any) -> int:
+        """Rough completeness score for experience richness."""
+        if not isinstance(experience, list):
+            return 0
 
-                score = 0
-                for exp in experience:
-                        if not isinstance(exp, dict):
-                                continue
+        score = 0
+        for exp in experience:
+            if not isinstance(exp, dict):
+                continue
 
-                        # Base role entry
-                        score += 1
+            # Base role entry
+            score += 1
 
-                        responsibilities = exp.get("responsibilities", [])
-                        if isinstance(responsibilities, list):
-                                score += len(responsibilities)
+            responsibilities = exp.get("responsibilities", [])
+            if isinstance(responsibilities, list):
+                score += len(responsibilities)
 
-                        projects = exp.get("projects", [])
-                        if isinstance(projects, list):
-                                score += len(projects) * 2
-                                for p in projects:
-                                        if not isinstance(p, dict):
-                                                continue
-                                        pr = p.get("responsibilities", [])
-                                        if isinstance(pr, list):
-                                                score += len(pr)
-                return score
+            projects = exp.get("projects", [])
+            if isinstance(projects, list):
+                score += len(projects) * 2
+                for p in projects:
+                    if not isinstance(p, dict):
+                        continue
+                    pr = p.get("responsibilities", [])
+                    if isinstance(pr, list):
+                        score += len(pr)
+        return score
 
-        def _extract_experience_only(self, resume_text: str) -> List[Dict[str, Any]]:
-                prompt = f"""Extract ONLY complete professional experience from this resume.
+    def _extract_experience_only(self, resume_text: str) -> List[Dict[str, Any]]:
+        prompt = f"""Extract ONLY complete professional experience from this resume.
 
 Rules:
 1) Return ONLY valid JSON.
@@ -227,19 +227,19 @@ Return format:
 Resume:
 {self._truncate(resume_text)}"""
 
-                response_text = self._create_completion(prompt, max_tokens=self._max_tokens_for("experience"))
-                parsed = self._extract_and_parse_json(response_text)
-                experience = parsed.get("experience", []) if isinstance(parsed, dict) else []
-                return experience if isinstance(experience, list) else []
+        response_text = self._create_completion(prompt, max_tokens=self._max_tokens_for("experience"))
+        parsed = self._extract_and_parse_json(response_text)
+        experience = parsed.get("experience", []) if isinstance(parsed, dict) else []
+        return experience if isinstance(experience, list) else []
 
-            def _is_groq_too_large_error(self, exc: Exception) -> bool:
-                msg = str(exc).lower()
-                return self.provider == "groq" and (
-                    "request too large" in msg
-                    or "tokens per minute" in msg
-                    or "rate_limit_exceeded" in msg
-                    or "error code: 413" in msg
-                )
+    def _is_groq_too_large_error(self, exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return self.provider == "groq" and (
+            "request too large" in msg
+            or "tokens per minute" in msg
+            or "rate_limit_exceeded" in msg
+            or "error code: 413" in msg
+        )
 
     def _recover_missing_sections(self, resume_text: str, missing_sections: list) -> Dict[str, Any]:
         section_list = ", ".join(f'"{s}"' for s in missing_sections)
