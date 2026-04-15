@@ -5,6 +5,7 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from typing import Dict, Any, List
 import copy
+import os
 
 
 class DocxGenerator:
@@ -29,7 +30,9 @@ class DocxGenerator:
         """
         self.template_path = template_path
 
-        if template_path:
+        template_ext = os.path.splitext(template_path)[1].lower() if template_path else ""
+
+        if template_path and template_ext in [".docx", ".doc"]:
             self.template_doc = Document(template_path)
             # Try to detect the font used in the template
             self._detect_template_font()

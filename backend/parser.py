@@ -76,12 +76,12 @@ class ResumeParser:
 
 
 class TemplateParser:
-    """Parser for extracting template information from reference DOCX"""
+    """Parser for extracting template information from reference DOCX or PDF"""
 
     @staticmethod
     def extract_template_info(file_path: str) -> dict:
         """
-        Extract template structure, styles, and formatting from reference DOCX.
+        Extract template structure, styles, and formatting from reference template.
         
         Args:
             file_path: Path to reference template DOCX
@@ -100,6 +100,38 @@ class TemplateParser:
         }
 
         try:
+            _, ext = os.path.splitext(file_path)
+            ext = ext.lower()
+
+            # PDF templates are supported with a lightweight structure extraction.
+            if ext == ".pdf":
+                with pdfplumber.open(file_path) as pdf:
+                    if pdf.pages:
+                        first_page = pdf.pages[0]
+                        template_info["margins"] = {
+                            "top": 0,
+                            "bottom": 0,
+                            "left": 0,
+                            "right": 0,
+                            "page_width": first_page.width,
+                            "page_height": first_page.height,
+                        }
+
+                    for page in pdf.pages:
+                        page_text = (page.extract_text() or "").splitlines()
+                        for line in page_text:
+                            t = line.strip()
+                            if not t:
+                                continue
+                            t = (t[:100] + "...") if len(t) > 100 else t
+                            template_info["sections"].append({
+                                "text_preview": t,
+                                "level": "Normal",
+                                "alignment": "None",
+                            })
+
+                return template_info
+
             doc = Document(file_path)
 
             # Extract margins
