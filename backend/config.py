@@ -9,6 +9,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 
+# Safety override: deployed Render environment should use Gemini only.
+if os.getenv("RENDER", "").lower() == "true":
+	LLM_PROVIDER = "gemini"
+
 # Groq API Configuration
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")

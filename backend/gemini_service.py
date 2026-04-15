@@ -52,6 +52,27 @@ class GeminiService:
             return text[:self.max_resume_chars] + "\n...[content truncated]"
         return text
 
+    def _max_tokens_for(self, task: str) -> int:
+        """Return provider-safe max output token budget per task."""
+        if self.provider == "groq":
+            # Groq on-demand tier has strict TPM; keep outputs conservative.
+            if task == "parse":
+                return 1800
+            if task == "recover":
+                return 1200
+            if task == "experience":
+                return 1500
+            return 1000
+
+        # Gemini/Ollama can use larger budgets.
+        if task == "parse":
+            return 12000
+        if task == "recover":
+            return 6000
+        if task == "experience":
+            return 12000
+        return 4000
+
     def _extract_and_parse_json(self, response_text: str) -> Dict[str, Any]:
         if response_text.startswith("```json"):
             response_text = response_text[7:]
@@ -206,10 +227,19 @@ Return format:
 Resume:
 {self._truncate(resume_text)}"""
 
-                response_text = self._create_completion(prompt, max_tokens=20000)
+                response_text = self._create_completion(prompt, max_tokens=self._max_tokens_for("experience"))
                 parsed = self._extract_and_parse_json(response_text)
                 experience = parsed.get("experience", []) if isinstance(parsed, dict) else []
                 return experience if isinstance(experience, list) else []
+
+            def _is_groq_too_large_error(self, exc: Exception) -> bool:
+                msg = str(exc).lower()
+                return self.provider == "groq" and (
+                    "request too large" in msg
+                    or "tokens per minute" in msg
+                    or "rate_limit_exceeded" in msg
+                    or "error code: 413" in msg
+                )
 
     def _recover_missing_sections(self, resume_text: str, missing_sections: list) -> Dict[str, Any]:
         section_list = ", ".join(f'"{s}"' for s in missing_sections)
@@ -225,7 +255,7 @@ Rules:
 Resume:
 {self._truncate(resume_text)}"""
 
-        response_text = self._create_completion(prompt, max_tokens=12000)
+        response_text = self._create_completion(prompt, max_tokens=self._max_tokens_for("recover"))
         recovered = self._extract_and_parse_json(response_text)
         return recovered if isinstance(recovered, dict) else {}
 
@@ -289,7 +319,7 @@ Resume:
 {self._truncate(resume_text)}"""
 
         try:
-            response_text = self._create_completion(prompt, max_tokens=12000)
+            response_text = self._create_completion(prompt, max_tokens=self._max_tokens_for("parse"))
             parsed_resume = self._extract_and_parse_json(response_text)
 
             if not isinstance(parsed_resume, dict):
@@ -327,6 +357,36 @@ Resume:
 
             return parsed_resume
         except Exception as e:
+            if self._is_groq_too_large_error(e):
+                # Retry with a smaller input slice and lower output budget for strict Groq limits.
+                try:
+                    retry_chars = min(5000, len(resume_text))
+                    reduced_resume = resume_text[:retry_chars]
+                    retry_prompt = f"""You are a resume parsing engine. Extract structured JSON from this resume content.
+
+Return ONLY valid JSON with keys: name, title, summary, experience, skills, certifications, education.
+Keep fields concise if needed, but preserve key role/company/date/project/responsibility details.
+
+Resume:
+{reduced_resume}"""
+                    response_text = self._create_completion(retry_prompt, max_tokens=1200)
+                    parsed_resume = self._extract_and_parse_json(response_text)
+                    if isinstance(parsed_resume, dict):
+                        for k, default in {
+                            "name": "",
+                            "title": "",
+                            "summary": "",
+                            "experience": [],
+                            "skills": [],
+                            "certifications": [],
+                            "education": [],
+                        }.items():
+                            if k not in parsed_resume:
+                                parsed_resume[k] = default
+                        return parsed_resume
+                except Exception:
+                    pass
+
             raise Exception(f"LLM Error during Parsing ({self.provider}): {str(e)}")
 
     def map_to_template(self, parsed_resume: Dict[str, Any],
