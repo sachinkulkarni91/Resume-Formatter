@@ -20,8 +20,11 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 # File Upload Configuration
 UPLOAD_DIR = "uploads"
 OUTPUT_DIR = "outputs"
+KNOWLEDGE_BASE_PATH = os.getenv("KNOWLEDGE_BASE_PATH", os.path.join(OUTPUT_DIR, "resume_knowledge.jsonl"))
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 ALLOWED_EXTENSIONS = {"pdf", "docx", "doc"}
+TARGET_ALLOWED_EXTENSIONS = {"pdf", "docx", "doc"}
+TEMPLATE_ALLOWED_EXTENSIONS = {"pdf", "docx", "doc", "ppt", "pptx"}
 
 # API Configuration
 API_HOST = os.getenv("API_HOST", "0.0.0.0")

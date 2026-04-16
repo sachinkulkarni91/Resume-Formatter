@@ -20,6 +20,23 @@ export const formatResume = async (targetResume, template) => {
   return response.data
 }
 
+export const prepareConversion = async (resume) => {
+  const formData = new FormData()
+  formData.append('resume', resume)
+
+  const response = await api.post('/api/prepare-conversion', formData)
+  return response.data
+}
+
+export const applySuggestions = async (parsedData, acceptedSuggestions) => {
+  const formData = new FormData()
+  formData.append('parsed_json', JSON.stringify(parsedData))
+  formData.append('accepted_suggestions', JSON.stringify(acceptedSuggestions))
+
+  const response = await api.post('/api/apply-suggestions', formData)
+  return response.data
+}
+
 export const formatFromParsed = async (parsedData, template) => {
   const formData = new FormData()
   formData.append('parsed_json', JSON.stringify(parsedData))

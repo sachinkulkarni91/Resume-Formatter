@@ -1,5 +1,6 @@
 import pdfplumber
 from docx import Document
+from pptx import Presentation
 from typing import Tuple
 import os
 
@@ -76,7 +77,7 @@ class ResumeParser:
 
 
 class TemplateParser:
-    """Parser for extracting template information from reference DOCX or PDF"""
+    """Parser for extracting template information from reference DOCX, PDF, or PPTX"""
 
     @staticmethod
     def extract_template_info(file_path: str) -> dict:
@@ -130,6 +131,23 @@ class TemplateParser:
                                 "alignment": "None",
                             })
 
+                return template_info
+
+            if ext in [".ppt", ".pptx"]:
+                prs = Presentation(file_path)
+                template_info["margins"] = {}
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text"):
+                            t = (shape.text or "").strip()
+                            if not t:
+                                continue
+                            t = (t[:100] + "...") if len(t) > 100 else t
+                            template_info["sections"].append({
+                                "text_preview": t,
+                                "level": "Normal",
+                                "alignment": "None",
+                            })
                 return template_info
 
             doc = Document(file_path)

@@ -1,10 +1,11 @@
 import json
 import re
 import requests
-from config import GROQ_API_KEY, GROQ_MODEL, LLM_PROVIDER, OLLAMA_MODEL, GEMINI_API_KEY, GEMINI_MODEL
+from config import GROQ_API_KEY, GROQ_MODEL, LLM_PROVIDER, OLLAMA_MODEL, GEMINI_API_KEY, GEMINI_MODEL, KNOWLEDGE_BASE_PATH
 from typing import Dict, Any, List
 from json_repair import repair_json
 import os
+from resume_knowledge import ResumeKnowledgeBase
 
 class GeminiService:
     """Service for LLM-based resume parsing.
@@ -17,6 +18,7 @@ class GeminiService:
 
     def __init__(self):
         self.provider = LLM_PROVIDER
+        self.knowledge = ResumeKnowledgeBase(KNOWLEDGE_BASE_PATH)
 
         if self.provider == "gemini":
             self.api_key = GEMINI_API_KEY
@@ -261,6 +263,9 @@ Resume:
 
     def parse_resume(self, resume_text: str) -> Dict[str, Any]:
         """Parse resume text into structured JSON using the configured LLM."""
+        context_hint = self.knowledge.get_context(resume_text)
+        context_block = f"\nReference patterns from prior parsed resumes:\n{context_hint}\n" if context_hint else ""
+
         prompt = f"""You are a resume parsing engine. Extract ALL information from the resume below into structured JSON.
 
 IMPORTANT: Extract EVERY SINGLE responsibility, project, date, technology, and line of experience from the resume. Do NOT skip, condense, or summarize ANY content. The output MUST contain 100% of the original bullet points unedited. If the resume is 7 pages, extract 7 pages worth of detail!
@@ -315,6 +320,8 @@ Return ONLY valid JSON with these fields:
   ]
 }}
 
+{context_block}
+
 Resume:
 {self._truncate(resume_text)}"""
 
@@ -354,6 +361,12 @@ Resume:
             }.items():
                 if k not in parsed_resume:
                     parsed_resume[k] = default
+
+            # Persist parsed examples for future accuracy improvements.
+            try:
+                self.knowledge.add_entry(resume_text, parsed_resume)
+            except Exception as kb_error:
+                print(f"[WARN] Knowledge base write skipped: {kb_error}")
 
             return parsed_resume
         except Exception as e:
@@ -400,11 +413,21 @@ Resume:
         """Generate ATS-friendly suggestions for resume improvement."""
         prompt = f"""You are a resume advisor. Analyze the resume below and return ONLY valid JSON with:
 {{
-  "ats_score": "0-100",
-  "suggestions": ["suggestion1", "suggestion2"],
-  "keywords_to_add": ["keyword1", "keyword2"],
-  "formatting_tips": ["tip1", "tip2"]
+    "ats_score": "0-100",
+    "suggestions": [
+        {{
+            "id": "S1",
+            "section": "summary|experience|skills|education|certifications",
+            "title": "short title",
+            "reason": "why this change helps",
+            "suggested_text": "replacement or additional text"
+        }}
+    ],
+    "keywords_to_add": ["keyword1", "keyword2"],
+    "formatting_tips": ["tip1", "tip2"]
 }}
+
+Keep suggestions practical and directly editable by a user.
 
 Resume:
 {self._truncate(resume_text)}"""
@@ -414,3 +437,32 @@ Resume:
             return self._extract_and_parse_json(response_text)
         except Exception as e:
             raise Exception(f"LLM Error during Suggestions ({self.provider}): {str(e)}")
+
+    def apply_suggestions(self, parsed_resume: Dict[str, Any], accepted_suggestions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Apply accepted suggestions to parsed resume JSON using LLM-assisted editing."""
+        if not accepted_suggestions:
+            return parsed_resume
+
+        prompt = f"""You are editing structured resume JSON.
+
+Given the parsed resume JSON and accepted suggestions below, return ONLY valid updated JSON.
+Rules:
+1) Keep existing structure and keys.
+2) Apply only accepted suggestions.
+3) Preserve all original details unless a suggestion explicitly updates them.
+
+Parsed resume JSON:
+{json.dumps(parsed_resume, ensure_ascii=False)}
+
+Accepted suggestions:
+{json.dumps(accepted_suggestions, ensure_ascii=False)}
+"""
+
+        try:
+            response_text = self._create_completion(prompt, max_tokens=4000)
+            updated = self._extract_and_parse_json(response_text)
+            if isinstance(updated, dict):
+                return updated
+            return parsed_resume
+        except Exception:
+            return parsed_resume

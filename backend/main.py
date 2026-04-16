@@ -7,7 +7,16 @@ import json
 from typing import Optional
 import shutil
 
-from config import API_HOST, API_PORT, UPLOAD_DIR, OUTPUT_DIR, MAX_FILE_SIZE, CORS_ORIGINS, ALLOWED_EXTENSIONS
+from config import (
+    API_HOST,
+    API_PORT,
+    UPLOAD_DIR,
+    OUTPUT_DIR,
+    MAX_FILE_SIZE,
+    CORS_ORIGINS,
+    TARGET_ALLOWED_EXTENSIONS,
+    TEMPLATE_ALLOWED_EXTENSIONS,
+)
 from parser import ResumeParser, TemplateParser
 from gemini_service import GeminiService
 from template_engine import TemplateEngine
@@ -82,13 +91,13 @@ async def format_resume(
         target_ext = os.path.splitext(target_resume.filename)[1].lower().lstrip(".")
         template_ext = os.path.splitext(template.filename)[1].lower().lstrip(".")
         
-        if target_ext not in ALLOWED_EXTENSIONS:
+        if target_ext not in TARGET_ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid target resume format: {target_ext}"
             )
         
-        if template_ext not in ALLOWED_EXTENSIONS:
+        if template_ext not in TEMPLATE_ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid template format: {template_ext}"
@@ -199,7 +208,7 @@ async def format_from_parsed(
 
     try:
         template_ext = os.path.splitext(template.filename)[1].lower().lstrip(".")
-        if template_ext not in ALLOWED_EXTENSIONS:
+        if template_ext not in TEMPLATE_ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid template format: {template_ext}",
@@ -268,7 +277,7 @@ async def parse_resume_endpoint(resume: UploadFile = File(...)):
     try:
         ext = os.path.splitext(resume.filename)[1].lower().lstrip(".")
         
-        if ext not in ALLOWED_EXTENSIONS:
+        if ext not in TARGET_ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid file format: {ext}"
@@ -321,7 +330,7 @@ async def extract_template_endpoint(template: UploadFile = File(...)):
     try:
         ext = os.path.splitext(template.filename)[1].lower().lstrip(".")
         
-        if ext not in ALLOWED_EXTENSIONS:
+        if ext not in TEMPLATE_ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid file format: {ext}"
@@ -357,44 +366,85 @@ async def extract_template_endpoint(template: UploadFile = File(...)):
         )
 
 
+@app.post("/api/prepare-conversion")
+async def prepare_conversion(resume: UploadFile = File(...)):
+    """
+    Parse resume and generate suggestions in a single workflow step.
+    """
+    temp_path = None
+    try:
+        ext = os.path.splitext(resume.filename)[1].lower().lstrip(".")
+        if ext not in TARGET_ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"Invalid file format: {ext}")
+
+        request_id = str(uuid.uuid4())
+        temp_path = os.path.join(UPLOAD_DIR, f"{request_id}_{resume.filename}")
+        with open(temp_path, "wb") as f:
+            f.write(await resume.read())
+
+        resume_text = ResumeParser.parse(temp_path)
+        parsed = gemini_service.parse_resume(resume_text)
+        suggestions = gemini_service.suggest_improvements(resume_text)
+
+        cleanup_file(temp_path)
+        return JSONResponse({"parsed_resume": parsed, "suggestions": suggestions})
+
+    except HTTPException as e:
+        if temp_path:
+            cleanup_file(temp_path)
+        raise e
+    except Exception as e:
+        if temp_path:
+            cleanup_file(temp_path)
+        raise HTTPException(status_code=500, detail=f"Error preparing conversion: {str(e)}")
+
+
+@app.post("/api/apply-suggestions")
+async def apply_suggestions_endpoint(
+    parsed_json: str = Form(...),
+    accepted_suggestions: str = Form(...),
+):
+    """Apply accepted suggestions to parsed resume JSON."""
+    try:
+        parsed = json.loads(parsed_json)
+        suggestions = json.loads(accepted_suggestions)
+        if not isinstance(parsed, dict):
+            raise ValueError("parsed_json must be a JSON object")
+        if not isinstance(suggestions, list):
+            raise ValueError("accepted_suggestions must be a JSON list")
+
+        updated = gemini_service.apply_suggestions(parsed, suggestions)
+        return JSONResponse(updated)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error applying suggestions: {str(e)}")
+
+
 @app.post("/api/suggest-improvements")
 async def suggest_improvements_endpoint(resume: UploadFile = File(...)):
     """
     Get ATS optimization suggestions for a resume.
-    
-    Parameters:
-    - resume: Resume file (PDF or DOCX)
-    
-    Returns:
-    - Suggestions JSON
     """
     temp_path = None
-    
+
     try:
         ext = os.path.splitext(resume.filename)[1].lower().lstrip(".")
-        
-        if ext not in ALLOWED_EXTENSIONS:
+
+        if ext not in TARGET_ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid file format: {ext}"
             )
 
-        # Save file
         request_id = str(uuid.uuid4())
         temp_path = os.path.join(UPLOAD_DIR, f"{request_id}_{resume.filename}")
-        
+
         with open(temp_path, "wb") as f:
             f.write(await resume.read())
 
-        # Extract text
         resume_text = ResumeParser.parse(temp_path)
-        
-        # Get suggestions
         suggestions = gemini_service.suggest_improvements(resume_text)
 
-        # Clean up
         cleanup_file(temp_path)
-
         return JSONResponse(suggestions)
 
     except HTTPException as e:
@@ -405,7 +455,7 @@ async def suggest_improvements_endpoint(resume: UploadFile = File(...)):
     except Exception as e:
         if temp_path:
             cleanup_file(temp_path)
-        
+
         raise HTTPException(
             status_code=500,
             detail=f"Error generating suggestions: {str(e)}"
